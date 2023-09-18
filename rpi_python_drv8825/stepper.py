@@ -1,40 +1,62 @@
-import RPi.GPIO as GPIO
+from periphery import GPIO
 from time import sleep
 
+MotorDir = [
+    'forward',
+    'backward',
+]
+
+ControlMode = [
+    'hardward',
+    'softward',
+]
+
 class StepperMotor:
-    def __init__(self, enable_pin, step_pin, dir_pin, mode_pins, step_type, fullstep_delay):
-        """docstring for ."""
-        self.enable_pin = enable_pin
-        self.step_pin = step_pin
-        self.dir_pin = dir_pin
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(enable_pin, GPIO.OUT)
-        GPIO.setup(step_pin, GPIO.OUT)
-        GPIO.setup(dir_pin, GPIO.OUT)
-        GPIO.setup(mode_pins, GPIO.OUT)
-        resolution = {'Full':(0, 0, 0),
-                    'Half':(1, 0, 0),
-                    '1/4':(0, 1, 0),
-                    '1/8':(1, 1, 0),
-                    '1/16':(0, 0, 1),
-                    '1/32':(1, 0, 1)}
-        microsteps =  {'Full':1,
-                    'Half':2,
-                    '1/4':4,
-                    '1/8':8,
-                    '1/16':16,
-                    '1/32':32}
-        self.delay = .005/microsteps[step_type]
-        GPIO.output(mode_pins, resolution[step_type])
+    def __init__(self, dir_pin, step_pin, enable_pin, mode_pin0, mode_pin1, mode_pin2):  
+        self.enable_pin = GPIO(enable_pin[0], enable_pin[1], "out")
+        self.step_pin   = GPIO(step_pin[0],   step_pin[1],   "out")
+        self.dir_pin    = GPIO(dir_pin[0],    dir_pin[1],    "out")
+        self.mode_pin0  = GPIO(mode_pin0[0],  mode_pin0[1],  "out")
+        self.mode_pin1  = GPIO(mode_pin1[0],  mode_pin1[1],  "out")
+        self.mode_pin2  = GPIO(mode_pin2[0],  mode_pin2[1],  "out")
 
-    def enable(self, enable):
-        GPIO.output(self.enable_pin, not enable)
+    def __digital_write(self, pin: GPIO, level: int):
+        _level = level > 0
+        pin.write(_level)
 
-    def run(self, steps, clockwise):
-        GPIO.output(self.dir_pin, clockwise)
+    def Stop(self):
+        self.__digital_write(self.enable_pin, False)
+        
+    def SetMicroStep(self, mode, stepFormat):
+        microstep = {'fullstep': (0, 0, 0),
+                     'halfstep': (1, 0, 0),
+                     '1/4step': (0, 1, 0),
+                     '1/8step': (1, 1, 0),
+                     '1/16step': (0, 0, 1),
+                     '1/32step': (1, 0, 1)}
+        
+        if(mode == ControlMode[1]):
+            cfg = microstep[stepFormat]
+            self.__digital_write(self.mode_pin0, cfg[0])
+            self.__digital_write(self.mode_pin1, cfg[1])
+            self.__digital_write(self.mode_pin2, cfg[2])
+    
+    def TurnStep(self, direction, steps, stepDelay=0.005):
+        if(direction == MotorDir[0]):
+            self.__digital_write(self.enable_pin, True)
+            self.__digital_write(self.dir_pin, False)
+        elif(direction != MotorDir[0] and direction in MotorDir):
+            self.__digital_write(self.enable_pin, True)
+            self.__digital_write(self.dir_pin, True)
+        else:
+            print("Direction must be 'forward' or 'backward'")
+            self.__digital_write(self.enable_pin, False)
+
+        if(steps <= 0):
+            return
+        
         for i in range(steps):
-            GPIO.output(self.step_pin, GPIO.HIGH)
-            sleep(self.delay)
-            GPIO.output(self.step_pin, GPIO.LOW)
-            sleep(self.delay)
+            self.__digital_write(self.step_pin, True)
+            sleep(stepDelay)
+            self.__digital_write(self.step_pin, False)
+            sleep(stepDelay)
